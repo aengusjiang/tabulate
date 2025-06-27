@@ -234,6 +234,12 @@ public:
     return *this;
   }
 
+  Format& show_row_separator() {
+    show_border_top_ = true;
+    show_row_separator_ = true;
+    return *this;
+  }
+
   Format &corner(const std::string &value) {
     corner_top_left_ = value;
     corner_top_right_ = value;
@@ -382,6 +388,18 @@ public:
     return *this;
   }
 
+  enum class TrimMode {
+    kNone = 0,
+    kLeft = 1 << 0,
+    kRight = 1 << 1,
+    kBoth = kLeft | kRight,
+  };
+
+  Format &trim_mode(TrimMode trim_mode) {
+    trim_mode_ = trim_mode;
+    return *this;
+  }
+
   // Apply word wrap
   // Given an input string and a line length, this will insert \n
   // in strategic places in input string and apply word wrapping
@@ -405,15 +423,16 @@ public:
           current_line_length = 0;
         }
 
-        // If the current word is too long to fit on a line even on it's own then
-        // split the word up.
+        // If the current word is too long to fit on a line even on it's own
+        // then split the word up.
         while (get_sequence_length(word, locale, is_multi_byte_character_support_enabled) > width) {
           result += word.substr(0, width - 1) + "-";
           word = word.substr(width - 1);
           result += '\n';
         }
 
-        // Remove leading whitespace from the word so the new line starts flush to the left.
+        // Remove leading whitespace from the word so the new line starts flush
+        // to the left.
         word = trim_left(word);
       }
       result += word;
@@ -655,7 +674,6 @@ public:
     else
       result.corner_bottom_right_background_color_ = second.corner_bottom_right_background_color_;
 
-    // Column separator
     if (first.column_separator_.has_value())
       result.column_separator_ = first.column_separator_;
     else
@@ -681,6 +699,16 @@ public:
       result.locale_ = first.locale_;
     else
       result.locale_ = second.locale_;
+
+    if (first.trim_mode_.has_value())
+      result.trim_mode_ = first.trim_mode_;
+    else
+      result.trim_mode_ = second.trim_mode_;
+
+    if (first.show_row_separator_.has_value())
+		  result.show_row_separator_ = first.show_row_separator_;
+	  else
+		  result.show_row_separator_ = second.show_row_separator_;
 
     return result;
   }
@@ -717,6 +745,8 @@ private:
     column_separator_color_ = column_separator_background_color_ = Color::none;
     multi_byte_characters_ = false;
     locale_ = "";
+    trim_mode_ = TrimMode::kBoth;
+    show_row_separator_ = false;
   }
 
   // Helper methods for word wrapping:
@@ -772,7 +802,8 @@ private:
 
       std::string word = input.substr(start_index, index - start_index);
       char next_character = input.substr(index, 1)[0];
-      // Unlike whitespace, dashes and the like should stick to the word occurring before it.
+      // Unlike whitespace, dashes and the like should stick to the word
+      // occurring before it.
       if (isspace(next_character)) {
         result.push_back(word);
         result.push_back(std::string(1, next_character));
@@ -847,6 +878,10 @@ private:
   // Internationalization
   optional<bool> multi_byte_characters_{};
   optional<std::string> locale_{};
+
+  optional<TrimMode> trim_mode_{};
+
+  optional<bool> show_row_separator_{};
 };
 
 } // namespace tabulate

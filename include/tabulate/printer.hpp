@@ -49,7 +49,8 @@ public:
   static void print_row_in_cell(std::ostream &stream, TableInternal &table,
                                 const std::pair<size_t, size_t> &index,
                                 const std::pair<size_t, size_t> &dimension, size_t num_columns,
-                                size_t row_index);
+                                size_t row_index,
+                                const std::vector<std::string> &splitted_cell_text);
 
   static bool print_cell_border_top(std::ostream &stream, TableInternal &table,
                                     const std::pair<size_t, size_t> &index,

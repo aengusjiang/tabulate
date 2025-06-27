@@ -12,7 +12,7 @@
   <a href="https://github.com/p-ranav/tabulate/blob/master/LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="license"/>
   </a>
-  <img src="https://img.shields.io/badge/version-1.4-blue.svg?cacheSeconds=2592000" alt="version"/>
+  <img src="https://img.shields.io/badge/version-1.5-blue.svg?cacheSeconds=2592000" alt="version"/>
 </p>
 
 <p align="center">
@@ -70,6 +70,15 @@ int main() {
   universal_constants.add_row({"Planck's constant", "6.626 0693(11) × 10⁻³⁴ J·s"});
   universal_constants.add_row({"Dirac's constant", "1.054 571 68(18) × 10⁻³⁴ J·s"});
   universal_constants.add_row({"Speed of light in vacuum", "299 792 458 m·s⁻¹"});
+```
+
+Use `RowStream` to format table data with stream insertion.
+
+```cpp
+  employees.add_row({"Emp. ID", "First Name", "Last Name", "Department / Business Unit", "Pay Rate"});
+  employees.add_row(RowStream{} << 101 << "Donald" << "Patrick" << "Finance" << 59.6154);
+  employees.add_row(RowStream{} << 102 << "Rachel" << "Williams" << "Marketing and Operational\nLogistics Planning" << 34.9707);
+  employees.add_row(RowStream{} << 103 << "Ian" << "Jacob" << department << 57.0048);
 ```
 
 You can format this table using `Table.format()` which returns a `Format` object. Using a fluent interface, format properties of the table, e.g., borders, font styles, colors etc.

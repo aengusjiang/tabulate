@@ -199,6 +199,44 @@ inline void Printer::print_table(std::ostream &stream, TableInternal &table) {
   auto dimensions = compute_cell_dimensions(table);
   auto row_heights = dimensions.first;
   auto column_widths = dimensions.second;
+  auto splitted_cells_text = std::vector<std::vector<std::vector<std::string>>>(
+      num_rows, std::vector<std::vector<std::string>>(num_columns, std::vector<std::string>{}));
+
+  // Pre-compute the cells' content and split them into lines before actually
+  // iterating the cells.
+  for (size_t i = 0; i < num_rows; ++i) {
+    Row row = table[i];
+    for (size_t j = 0; j < num_columns; ++j) {
+      Cell cell = row.cell(j);
+      const std::string &text = cell.get_text();
+      auto padding_left = *cell.format().padding_left_;
+      auto padding_right = *cell.format().padding_right_;
+
+      // Check if input text has embedded \n that are to be respected
+      bool has_new_line = text.find_first_of('\n') != std::string::npos;
+
+      if (has_new_line) {
+        // Respect to the embedded '\n' characters
+        splitted_cells_text[i][j] = Format::split_lines(
+            text, "\n", cell.locale(), cell.is_multi_byte_character_support_enabled());
+      } else {
+        // If there are no embedded \n characters, then apply word wrap.
+        //
+        // Configured column width cannot be lower than (padding_left +
+        // padding_right) This is a bad configuration E.g., the user is trying
+        // to force the column width to be 5 when padding_left and padding_right
+        // are each configured to 3 (padding_left + padding_right) = 6 >
+        // column_width
+        auto content_width = column_widths[j] > padding_left + padding_right
+                                 ? column_widths[j] - padding_left - padding_right
+                                 : column_widths[j];
+        auto word_wrapped_text = Format::word_wrap(text, content_width, cell.locale(),
+                                                   cell.is_multi_byte_character_support_enabled());
+        splitted_cells_text[i][j] = Format::split_lines(
+            word_wrapped_text, "\n", cell.locale(), cell.is_multi_byte_character_support_enabled());
+      }
+    }
+  }
 
   // For each row,
   for (size_t i = 0; i < num_rows; ++i) {
@@ -215,8 +253,8 @@ inline void Printer::print_table(std::ostream &stream, TableInternal &table) {
     // Print row contents with word wrapping
     for (size_t k = 0; k < row_heights[i]; ++k) {
       for (size_t j = 0; j < num_columns; ++j) {
-        print_row_in_cell(stream, table, {i, j}, {row_heights[i], column_widths[j]}, num_columns,
-                          k);
+        print_row_in_cell(stream, table, {i, j}, {row_heights[i], column_widths[j]}, num_columns, k,
+                          splitted_cells_text[i][j]);
       }
       if (k + 1 < row_heights[i])
         stream << termcolor::reset << "\n";
@@ -253,7 +291,8 @@ inline void Printer::print_table(std::ostream &stream, TableInternal &table) {
 inline void Printer::print_row_in_cell(std::ostream &stream, TableInternal &table,
                                        const std::pair<size_t, size_t> &index,
                                        const std::pair<size_t, size_t> &dimension,
-                                       size_t num_columns, size_t row_index) {
+                                       size_t num_columns, size_t row_index,
+                                       const std::vector<std::string> &splitted_cell_text) {
   auto column_width = dimension.second;
   auto cell = table[index.first][index.second];
   auto locale = cell.locale();
@@ -264,10 +303,7 @@ inline void Printer::print_row_in_cell(std::ostream &stream, TableInternal &tabl
   auto old_locale = std::locale::global(std::locale(locale.c_str()));
 #endif
   auto format = cell.format();
-  auto text = cell.get_text();
-  auto word_wrapped_text =
-      Format::word_wrap(text, column_width, locale, is_multi_byte_character_support_enabled);
-  auto text_height = std::count(word_wrapped_text.begin(), word_wrapped_text.end(), '\n') + 1;
+  auto text_height = splitted_cell_text.size();
   auto padding_top = *format.padding_top_;
 
   if (*format.show_border_left_) {
@@ -282,53 +318,35 @@ inline void Printer::print_row_in_cell(std::ostream &stream, TableInternal &tabl
     // Padding top
     stream << std::string(column_width, ' ');
   } else if (row_index >= padding_top && (row_index <= (padding_top + text_height))) {
-    // // Row contents
-
     // Retrieve padding left and right
     // (column_width - padding_left - padding_right) is the amount of space
     // available for cell text - Use this to word wrap cell contents
     auto padding_left = *format.padding_left_;
     auto padding_right = *format.padding_right_;
 
-    // Check if input text has embedded \n that are to be respected
-    auto newlines_in_input = Format::split_lines(text, "\n", cell.locale(),
-                                                 cell.is_multi_byte_character_support_enabled())
-                                 .size() -
-                             1;
-    std::string word_wrapped_text;
-
-    // If there are no embedded \n characters, then apply word wrap
-    if (newlines_in_input == 0) {
-      // Apply word wrapping to input text
-      // Then display one word-wrapped line at a time within cell
-      if (column_width > (padding_left + padding_right))
-        word_wrapped_text =
-            Format::word_wrap(text, column_width - padding_left - padding_right, cell.locale(),
-                              cell.is_multi_byte_character_support_enabled());
-      else {
-        // Configured column width cannot be lower than (padding_left + padding_right)
-        // This is a bad configuration
-        // E.g., the user is trying to force the column width to be 5
-        // when padding_left and padding_right are each configured to 3
-        // (padding_left + padding_right) = 6 > column_width
-      }
-    } else {
-      word_wrapped_text = text; // repect the embedded '\n' characters
-    }
-
-    auto lines = Format::split_lines(word_wrapped_text, "\n", cell.locale(),
-                                     cell.is_multi_byte_character_support_enabled());
-
-    if (row_index - padding_top < lines.size()) {
-      auto line = lines[row_index - padding_top];
+    if (row_index - padding_top < text_height) {
+      auto line = splitted_cell_text[row_index - padding_top];
 
       // Print left padding characters
       stream << std::string(padding_left, ' ');
 
       // Print word-wrapped line
-      line = Format::trim(line);
+      switch (*format.trim_mode_) {
+      case Format::TrimMode::kBoth:
+        line = Format::trim(line);
+        break;
+      case Format::TrimMode::kLeft:
+        line = Format::trim_left(line);
+        break;
+      case Format::TrimMode::kRight:
+        line = Format::trim_right(line);
+        break;
+      case Format::TrimMode::kNone:
+        break;
+      }
+
       auto line_with_padding_size =
-          get_sequence_length(line, cell.locale(), cell.is_multi_byte_character_support_enabled()) +
+          get_sequence_length(line, cell.locale(), is_multi_byte_character_support_enabled) +
           padding_left + padding_right;
       switch (*format.font_align_) {
       case FontAlign::left:
@@ -385,17 +403,32 @@ inline bool Printer::print_cell_border_top(std::ostream &stream, TableInternal &
   auto corner_background_color = *format.corner_top_left_background_color_;
   auto border_top = *format.border_top_;
 
-  if ((corner == "" && border_top == "") || !*format.show_border_top_)
+  if ((corner == "" && border_top == "") || !*format.show_border_top_) {
+    std::locale::global(old_locale);
     return false;
+  }
 
   apply_element_style(stream, corner_color, corner_background_color, {});
-  stream << corner;
+  if (*format.show_row_separator_) {
+    if (index.first != 0)
+      stream << corner;
+    else
+      stream << " ";
+  }
+  else
+    stream << corner;
   reset_element_style(stream);
 
   for (size_t i = 0; i < column_width; ++i) {
     apply_element_style(stream, *format.border_top_color_, *format.border_top_background_color_,
                         {});
-    stream << border_top;
+    if (*format.show_row_separator_) {
+      if (index.first != 0)
+        stream << border_top;
+      else
+        stream << " ";
+    } else
+      stream << border_top;
     reset_element_style(stream);
   }
 
@@ -406,7 +439,14 @@ inline bool Printer::print_cell_border_top(std::ostream &stream, TableInternal &
     corner_background_color = *format.corner_top_right_background_color_;
 
     apply_element_style(stream, corner_color, corner_background_color, {});
-    stream << corner;
+    if (*format.show_row_separator_) {
+      if (index.first != 0)
+        stream << corner;
+      else
+        stream << " ";
+    }
+    else
+      stream << corner;
     reset_element_style(stream);
   }
   std::locale::global(old_locale);
@@ -432,8 +472,10 @@ inline bool Printer::print_cell_border_bottom(std::ostream &stream, TableInterna
   auto corner_background_color = *format.corner_bottom_left_background_color_;
   auto border_bottom = *format.border_bottom_;
 
-  if ((corner == "" && border_bottom == "") || !*format.show_border_bottom_)
+  if ((corner == "" && border_bottom == "") || !*format.show_border_bottom_) {
+    std::locale::global(old_locale);
     return false;
+  }
 
   apply_element_style(stream, corner_color, corner_background_color, {});
   stream << corner;

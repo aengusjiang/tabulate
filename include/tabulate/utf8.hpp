@@ -51,9 +51,10 @@ inline int get_wcswidth(const std::string &string, const std::string &locale,
   if (string.size() == 0)
     return 0;
 
-  // The behavior of wcswidth() depends on the LC_CTYPE category of the current locale.
-  // Set the current locale based on cell properties before computing width
-#if 4 < __GNUC__
+  // The behavior of wcswidth() depends on the LC_CTYPE category of the current
+  // locale. Set the current locale based on cell properties before computing
+  // width
+  #if 4 < __GNUC__
   auto old_locale = std::locale::global(std::locale(locale));
 #else
   auto old_locale = std::locale::global(std::locale(locale.c_str()));
@@ -80,7 +81,7 @@ inline size_t get_sequence_length(const std::string &text, const std::string &lo
     return text.length();
 
 #if defined(_WIN32) || defined(_WIN64)
-  (void) locale; // unused parameter
+  (void)locale; // unused parameter
   return (text.length() - std::count_if(text.begin(), text.end(),
                                         [](char c) -> bool { return (c & 0xC0) == 0x80; }));
 #elif defined(__unix__) || defined(__unix) || defined(__APPLE__)

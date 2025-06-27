@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.8)
-project(tabulate VERSION 1.4.0 LANGUAGES CXX)
+project(tabulate VERSION 1.5.0 LANGUAGES CXX)
 option(tabulate_BUILD_TESTS OFF)
 option(SAMPLES "Build Samples" OFF)
 
 set(TABULATE_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# Versionning
+# Versioning
 # ===========
 
 # Project version
